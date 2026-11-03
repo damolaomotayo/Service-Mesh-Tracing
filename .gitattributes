@@ -1,0 +1,6 @@
+# Keep Unix line endings so the shell scripts still run if edited on Windows.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.py text eol=lf
+*.md text eol=lf

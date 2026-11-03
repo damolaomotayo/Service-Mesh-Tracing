@@ -1,0 +1,19 @@
+# The mesh topology: which pods exist and who calls whom. (Traffic rules such as canary weights live in traffic.yaml.)
+# Every pod is an app container plus a sidecar proxy (Traefik) that shares its network.
+tracing:
+  endpoint: http://jaeger:4318/v1/traces      # OTLP over HTTP; Jaeger receives it
+ports:
+  app: 8000          # the app listens here, on 127.0.0.1 only (nobody can reach it except its own sidecar)
+  inbound: 15006     # the sidecar's mTLS port: the only way in from other pods
+  outbound: 15001    # the sidecar's plain port on 127.0.0.1: how the app calls its upstream
+  gateway: 8080      # public entry (only the frontend's sidecar has it)
+policy:
+  timeouts:                                                    # max wait for a reply from each upstream service.
+    catalog: 3s                                                # The caller of a slow service must wait LONGER than the
+    pricing: 1s                                                # service itself does, or the whole chain times out together.
+  breaker: "ResponseCodeRatio(500, 600, 0, 600) > 0.30"        # open the circuit when over 30% of replies are 5xx
+pods:
+  frontend:   {service: frontend, gateway: true, upstream: catalog}
+  catalog-v1: {service: catalog, version: v1, upstream: pricing}
+  catalog-v2: {service: catalog, version: v2, upstream: pricing}
+  pricing:    {service: pricing}

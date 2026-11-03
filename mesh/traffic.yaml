@@ -1,0 +1,5 @@
+# Traffic rules. Edit by hand or use ./scripts/mesh.sh. Every change is applied live (no restarts).
+retry_attempts: 3        # 1 = no retries
+catalog:
+  weights: {v1: 100, v2: 0}                                    # canary split, in percent
+  header_route: {header: x-canary, value: "true", version: v2} # requests with this header always go to this version

@@ -1,0 +1,71 @@
+# Every "pod" = an app container + a sidecar proxy container that SHARES its network (network_mode: service:<app>).
+# So the app reaches its sidecar on 127.0.0.1, and other pods can only reach the sidecar's mTLS port.
+name: mesh
+
+x-app: &app
+  build: ./app
+  image: mesh-app:local
+  restart: unless-stopped
+
+x-sidecar: &sidecar
+  image: ${TRAEFIK_IMAGE:-traefik:v3.7.17}
+  restart: unless-stopped
+  command: ["--configFile=/etc/traefik/traefik.yml"]
+
+services:
+  jaeger:
+    image: ${JAEGER_IMAGE:-jaegertracing/all-in-one:1.62.0}
+    container_name: mesh-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+
+  frontend:
+    <<: *app
+    container_name: mesh-frontend
+    environment: {SERVICE: frontend, POD: frontend, UPSTREAM_URL: "http://127.0.0.1:15001"}
+    ports:
+      - "8080:8080"
+  frontend-sidecar:
+    <<: *sidecar
+    container_name: mesh-frontend-sidecar
+    network_mode: "service:frontend"
+    depends_on: [frontend, jaeger]
+    volumes: ["./mesh/generated/frontend:/etc/traefik:ro", "./certs:/certs:ro"]
+
+  catalog-v1:
+    <<: *app
+    container_name: mesh-catalog-v1
+    environment: {SERVICE: catalog, VERSION: v1, POD: catalog-v1, UPSTREAM_URL: "http://127.0.0.1:15001"}
+    ports:
+      - "127.0.0.1:15101:15006"
+  catalog-v1-sidecar:
+    <<: *sidecar
+    container_name: mesh-catalog-v1-sidecar
+    network_mode: "service:catalog-v1"
+    depends_on: [catalog-v1, jaeger]
+    volumes: ["./mesh/generated/catalog-v1:/etc/traefik:ro", "./certs:/certs:ro"]
+
+  catalog-v2:
+    <<: *app
+    container_name: mesh-catalog-v2
+    environment: {SERVICE: catalog, VERSION: v2, POD: catalog-v2, UPSTREAM_URL: "http://127.0.0.1:15001"}
+  catalog-v2-sidecar:
+    <<: *sidecar
+    container_name: mesh-catalog-v2-sidecar
+    network_mode: "service:catalog-v2"
+    depends_on: [catalog-v2, jaeger]
+    volumes: ["./mesh/generated/catalog-v2:/etc/traefik:ro", "./certs:/certs:ro"]
+
+  pricing:
+    <<: *app
+    container_name: mesh-pricing
+    environment: {SERVICE: pricing, POD: pricing}
+  pricing-sidecar:
+    <<: *sidecar
+    container_name: mesh-pricing-sidecar
+    network_mode: "service:pricing"
+    depends_on: [pricing, jaeger]
+    volumes: ["./mesh/generated/pricing:/etc/traefik:ro", "./certs:/certs:ro"]

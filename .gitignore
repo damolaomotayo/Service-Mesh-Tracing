@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+*.pem
+.DS_Store
+# generated at run time
+certs/*
+!certs/.gitkeep
+mesh/generated/
